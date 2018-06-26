@@ -1,5 +1,5 @@
 import React, { Component } from 'react'
-import { StyleSheet, View, Button } from 'react-native';
+import { StyleSheet, View, TouchableHighlight, Text } from 'react-native';
 import PropTypes from 'prop-types'
 import t from 'tcomb-form-native'; // 0.6.9
 
@@ -24,16 +24,39 @@ class MessageForm extends Component {
     
     render() {
         return (
-            <View>
+            <View style={styles.form}>
                 <Form type={Message} 
                     ref={c => this._form = c}/> 
-                <Button
-                    title="Send"
+                <TouchableHighlight
                     onPress={this.handleFormSubmit}
-                />
+                    style={styles.button}
+                >
+                    <Text style={styles.buttonText}> Send </Text>
+                </TouchableHighlight>
             </View>
         )
     }
+
 }
+const styles = StyleSheet.create({
+        form: {
+            marginTop: 100
+        },
+        button: {
+            backgroundColor: 'blue',
+            borderRadius: 40,
+            width: 300,
+            height: 80,
+            alignItems: 'center',
+            justifyContent: 'center',
+            alignSelf: 'center',
+            marginBottom: 10
+        },
+        buttonText: {
+            color: 'white',
+            fontWeight: 'bold',
+            fontSize: 30
+        }
+});
 
 export default MessageForm

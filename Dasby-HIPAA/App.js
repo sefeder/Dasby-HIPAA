@@ -132,8 +132,8 @@ export default class App extends Component {
 
 const styles = StyleSheet.create({
   app: {
-    borderRadius: 3,
     display: 'flex',
+    overflow: 'scroll',
     flexDirection: 'column',
     flex: 1,
     justifyContent: 'flex-end'
