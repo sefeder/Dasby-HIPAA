@@ -17,8 +17,8 @@ class MessageForm extends Component {
     handleFormSubmit = (event) => {
         event.preventDefault()
         let value = this._form.getValue();
-        console.log('value: ', value.message);
-        this.props.onMessageSend(value)
+        console.log(value.message);
+        this.props.onMessageSend(value.message)
     }
 
     

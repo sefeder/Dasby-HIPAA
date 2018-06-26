@@ -1,6 +1,6 @@
 import React, { Component } from 'react'
 import PropTypes from 'prop-types'
-import { Text } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 
 
 class Message extends Component {
@@ -12,15 +12,25 @@ class Message extends Component {
 
     render() {
         return (
-            <Text>
-                {this.props.author && (
-                    <span className="author">{this.props.author}:</span>
-                )}
-                {this.props.body}
-            </Text>
+            <View style={{ flexDirection: 'row' }}>
+                {this.props.username === this.props.author ? <Text style= { styles.me }> Me: </Text>: this.props.author && (<Text style={styles.author}>{this.props.author}:</Text>) }
+                
+                <Text> {this.props.body} </Text>
+            </View>
          
         )
     }
 }
+
+const styles = StyleSheet.create({
+    author: {
+     color: 'red',
+     fontWeight: 'bold'
+    },
+    me: {
+    color: 'grey',
+    fontWeight: 'bold'
+    }
+});
 
 export default Message

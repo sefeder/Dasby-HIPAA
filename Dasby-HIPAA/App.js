@@ -1,11 +1,12 @@
 import React, {Component} from 'react';
-import { StyleSheet, Text, View, Button } from 'react-native';
+import { KeyboardAvoidingView, StyleSheet, Text, View, Button } from 'react-native';
 import MessageForm from './MessageForm'
 import MessageList from './MessageList'
 import $ from 'jquery'
 
 
 export default class App extends Component {
+  
   constructor(props) {
     super(props)
     this.state = {
@@ -13,6 +14,7 @@ export default class App extends Component {
       username: null,
       channel: null
     }
+    
   }
 
   componentDidMount = () => {
@@ -28,8 +30,9 @@ export default class App extends Component {
       })
   }
   createChatClient = (token) => {
-    const Chat = require('twilio-chat')
+    const Chat = require('twilio-chat');
     return new Promise((resolve, reject) => {
+      console.log(token.identity);
       resolve(Chat.Client.create(token.jwt))
       console.log(Chat.Client.create(token.jwt))
     })
@@ -59,9 +62,9 @@ export default class App extends Component {
   joinGeneralChannel = (chatClient) => {
     return new Promise((resolve, reject) => {
       chatClient.getSubscribedChannels().then(res => {
-        console.log(res)
+        console.log('subscribed channels: '+res)
         chatClient.getChannelByUniqueName('general').then((channel) => {
-          console.log(channel)
+          console.log('unique channel: '+channel)
           this.addMessage({ body: 'Joining general channel...' })
           this.setState({ channel })
 
@@ -77,32 +80,35 @@ export default class App extends Component {
   }
 
   getToken = () => {
+    process.nextTick = setImmediate
     const $ = require('jquery')
+    const Promise = require('promise')
     return new Promise((resolve, reject) => {
 
       this.setState({
         messages: [...this.state.messages, { body: `Connecting...` }],
       })
-      return fetch('http://localhost:3005/token', {
+      return fetch('http://dc50b09a.ngrok.io/token', {
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
+          'Accept': 'application/json',
+        },
       }).then(res => res.json()).catch(err => console.log(err)).then((token) => {
-        console.log('this is a token: '+ token)
+        console.log('this is a token identity: ' + token.identity)
         this.setState({ username: token.identity })
         resolve(token)
-      }).fail(() => {
+      }).catch(() => {
         reject(Error("Failed to connect."))
       })
     })
   }
 
+
   createGeneralChannel = (chatClient) => {
     return new Promise((resolve, reject) => {
       this.addMessage({ body: 'Creating general channel...' })
       chatClient
-        .createChannel({ uniqueName: 'general', friendlyName: 'General Chat' })
+        .createChannel({ uniqueName: 'dasby', friendlyName: 'Dasby' })
         .then(() => this.joinGeneralChannel(chatClient))
         .catch(() => reject(Error('Could not create general channel.')))
     })
@@ -116,10 +122,10 @@ export default class App extends Component {
 
   render() {
     return (
-      <View style={styles.app}>
-          <MessageList messages={this.state.messages} />
+      <KeyboardAvoidingView style={styles.app} behavior="padding" enabled>
+        <MessageList username={this.state.username} messages={this.state.messages} />
           <MessageForm onMessageSend={this.handleNewMessage} />
-      </View>
+      </KeyboardAvoidingView>
     );
   }
 }
@@ -127,8 +133,9 @@ export default class App extends Component {
 const styles = StyleSheet.create({
   app: {
     borderRadius: 3,
-    fontSize: 13,
     display: 'flex',
-    flexDirection: 'column'
+    flexDirection: 'column',
+    flex: 1,
+    justifyContent: 'flex-end'
   },
 });
