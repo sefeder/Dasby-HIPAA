@@ -37,6 +37,6 @@ app.get('/token', (req, res) => {
 })
 
 
-app.listen(3005, function () {
-    console.log('Programmable Chat token server listening on port 3005!')
+app.listen(3006, function () {
+    console.log('Programmable Chat token server listening on port 3006!')
 })

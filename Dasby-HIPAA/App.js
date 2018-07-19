@@ -3,7 +3,9 @@ import { KeyboardAvoidingView, StyleSheet, Text, View, Button } from 'react-nati
 import MessageForm from './MessageForm'
 import MessageList from './MessageList'
 import $ from 'jquery'
-
+import { VirgilCrypto, VirgilCardCrypto } from 'virgil-crypto' 
+import { CardManager, VirgilCardVerifier, CachingJwtProvider } from 'virgil-sdk';
+import { Chance } from 'chance'
 
 export default class App extends Component {
   
@@ -12,22 +14,89 @@ export default class App extends Component {
     this.state = {
       messages: [],
       username: null,
-      channel: null
+      channel: null,
+      identity: null
     }
     
   }
 
   componentDidMount = () => {
-    this.getToken()
-      .then(this.createChatClient)
-      .then(this.joinGeneralChannel)
-      .then(this.configureChannelEvents)
-      .catch((error) => {
-        console.log(error)
-        this.setState({
-          messages: [...this.state.messages, { body: `Error: ${error.message}` }],
-        })
-      })
+    this.identify()
+  }
+
+  identify = () => {
+    //this doesn't work correctly
+    let chance = new Chance()
+    let identity = chance.name()
+    console.log('this is identity created by Chance: '+identity)
+    this.setState({
+      identity: identity
+    },
+      () => this.startChat()
+    )
+  }
+
+  startChat = () => {
+    this.initializeVirgil(this.state.identity)
+    // this.getToken()
+    //   .then(this.createChatClient)
+    //   .then(this.joinGeneralChannel)
+    //   .then(this.configureChannelEvents)
+    //   .catch((error) => {
+    //     console.log(error)
+    //     this.setState({
+    //       messages: [...this.state.messages, { body: `Error: ${error.message}` }],
+    //     })
+    //   })
+  } 
+
+  initializeVirgil = (identity) => {
+    const virgilCrypto = new VirgilCrypto();
+    const virgilCardCrypto = new VirgilCardCrypto(virgilCrypto);
+    const cardManager = new CardManager({
+      cardCrypto: virgilCardCrypto,
+      cardVerifier: new VirgilCardVerifier(virgilCardCrypto)
+    });
+    // const identity = 'user_' + Math.random().toString(36).substring(2);
+    console.log('this is identity in initializeVirgil: '+identity)
+    const keyPair = virgilCrypto.generateKeys();
+    const rawCard = cardManager.generateRawCard({
+      privateKey: keyPair.privateKey,
+      publicKey: keyPair.publicKey,
+      identity: identity
+    });
+    fetch('http://localhost:3000/signup', {
+      method: 'POST',
+      body: JSON.stringify({ rawCard }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }).then(response => response.json()).then(result => {
+      const publishedCard = cardManager.importCardFromJson(result.virgil_card);
+      cardManager.accessTokenProvider = new CachingJwtProvider(() => {
+        return fetch('http://localhost:3000/get-virgil-jwt', {
+          method: 'POST',
+          headers: {
+            'Authorization': generateAuthHeader(publishedCard.id, keyPair.privateKey),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ identity: identity }),
+        }).then(response =>
+          response.json()
+          ).then(result =>
+            result.token
+          ).then(token => console.log(token))
+      });
+      cardManager.searchCards('your_other_user_identity').then(cards => {
+        console.log(cards);
+      });
+    });
+    function generateAuthHeader(virgilCardId, virgilPrivateKey) {
+      const stringToSign = `${virgilCardId}.${Date.now()}`;
+      const signature = virgilCrypto.calculateSignature(stringToSign, virgilPrivateKey);
+      console.log(`Bearer ${stringToSign}.${signature.toString('base64')}`)
+      return `Bearer ${stringToSign}.${signature.toString('base64')}`;
+    }
   }
   createChatClient = (token) => {
     const Chat = require('twilio-chat');
@@ -88,7 +157,7 @@ export default class App extends Component {
       this.setState({
         messages: [...this.state.messages, { body: `Connecting...` }],
       })
-      return fetch('http://dc50b09a.ngrok.io/token', {
+      return fetch('http://db3ce981.ngrok.io/token', {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
