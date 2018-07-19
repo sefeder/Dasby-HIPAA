@@ -15,7 +15,8 @@ export default class App extends Component {
       messages: [],
       username: null,
       channel: null,
-      identity: null
+      identity: null,
+      keyPair: null
     }
     
   }
@@ -38,19 +39,20 @@ export default class App extends Component {
 
   startChat = () => {
     this.initializeVirgil(this.state.identity)
-    // this.getToken()
-    //   .then(this.createChatClient)
-    //   .then(this.joinGeneralChannel)
-    //   .then(this.configureChannelEvents)
-    //   .catch((error) => {
-    //     console.log(error)
-    //     this.setState({
-    //       messages: [...this.state.messages, { body: `Error: ${error.message}` }],
-    //     })
-    //   })
+      .then(this.getToken)
+      .then(this.createChatClient)
+      .then(this.joinGeneralChannel)
+      .then(this.configureChannelEvents)
+      .catch((error) => {
+        console.log(error)
+        this.setState({
+          messages: [...this.state.messages, { body: `Error: ${error.message}` }],
+        })
+      })
   } 
 
   initializeVirgil = (identity) => {
+    return new Promise((resolve, reject) => {
     const virgilCrypto = new VirgilCrypto();
     const virgilCardCrypto = new VirgilCardCrypto(virgilCrypto);
     const cardManager = new CardManager({
@@ -60,6 +62,8 @@ export default class App extends Component {
     // const identity = 'user_' + Math.random().toString(36).substring(2);
     console.log('this is identity in initializeVirgil: '+identity)
     const keyPair = virgilCrypto.generateKeys();
+    //next line may be privacy breach. need to get private key to getToken function
+    this.setState({keyPair})
     const rawCard = cardManager.generateRawCard({
       privateKey: keyPair.privateKey,
       publicKey: keyPair.publicKey,
@@ -72,32 +76,41 @@ export default class App extends Component {
         'Content-Type': 'application/json'
       }
     }).then(response => response.json()).then(result => {
-      const publishedCard = cardManager.importCardFromJson(result.virgil_card);
-      cardManager.accessTokenProvider = new CachingJwtProvider(() => {
-        return fetch('http://localhost:3000/get-virgil-jwt', {
-          method: 'POST',
-          headers: {
-            'Authorization': generateAuthHeader(publishedCard.id, keyPair.privateKey),
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ identity: identity }),
-        }).then(response =>
-          response.json()
-          ).then(result =>
-            result.token
-          ).then(token => console.log(token))
-      });
-      cardManager.searchCards('your_other_user_identity').then(cards => {
-        console.log(cards);
-      });
+        const publishedCard = cardManager.importCardFromJson(result.virgil_card);
+        console.log(publishedCard)
+        resolve(publishedCard)
+        cardManager.accessTokenProvider = new CachingJwtProvider(() => {
+          return fetch('http://localhost:3000/get-virgil-jwt', {
+              method: 'POST',
+              headers: {
+                'Authorization': this.generateAuthHeader(publishedCard.id, keyPair.privateKey),
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ identity: identity })
+            })
+            .then(response => response.json())
+            .then(result => result.token)
+            .then(token => console.log(token))
+          })
+        
+        
+        cardManager.searchCards('your_other_user_identity').then(cards => {
+          console.log(cards);
+        });
     });
-    function generateAuthHeader(virgilCardId, virgilPrivateKey) {
-      const stringToSign = `${virgilCardId}.${Date.now()}`;
-      const signature = virgilCrypto.calculateSignature(stringToSign, virgilPrivateKey);
-      console.log(`Bearer ${stringToSign}.${signature.toString('base64')}`)
-      return `Bearer ${stringToSign}.${signature.toString('base64')}`;
-    }
+   // took generateAuthHeader from here
+    
+  })
   }
+
+  generateAuthHeader = (virgilCardId, virgilPrivateKey) => {
+    const virgilCrypto = new VirgilCrypto();
+    const stringToSign = `${virgilCardId}.${Date.now()}`;
+    const signature = virgilCrypto.calculateSignature(stringToSign, virgilPrivateKey);
+    console.log(`Bearer ${stringToSign}.${signature.toString('base64')}`)
+    return `Bearer ${stringToSign}.${signature.toString('base64')}`;
+  }
+
   createChatClient = (token) => {
     const Chat = require('twilio-chat');
     return new Promise((resolve, reject) => {
@@ -148,22 +161,25 @@ export default class App extends Component {
     })
   }
 
-  getToken = () => {
+  getToken = (publishedCard) => {
     process.nextTick = setImmediate
-    const $ = require('jquery')
+    // const $ = require('jquery')
     const Promise = require('promise')
     return new Promise((resolve, reject) => {
-
+      // console.log(publishedCard)
       this.setState({
         messages: [...this.state.messages, { body: `Connecting...` }],
       })
-      return fetch('http://db3ce981.ngrok.io/token', {
+      return fetch('http://localhost:3000/get-twilio-jwt', {
+        method: 'POST',
         headers: {
+          'Authorization': this.generateAuthHeader(publishedCard.id, this.state.keyPair.privateKey),
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
+        body: JSON.stringify({identity: publishedCard.identity})
       }).then(res => res.json()).catch(err => console.log(err)).then((token) => {
-        console.log('this is a token identity: ' + token.identity)
+        console.log('this is the token identity: ' + token.identity)
         this.setState({ username: token.identity })
         resolve(token)
       }).catch(() => {
