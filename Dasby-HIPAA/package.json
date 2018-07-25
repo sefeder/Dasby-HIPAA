@@ -31,6 +31,7 @@
     "react-native": "~0.55.2",
     "react-navigation": "^2.6.2",
     "tcomb-form-native": "^0.6.13",
+    "twilio": "^3.18.0",
     "twilio-chat": "^3.0.0",
     "util": "^0.11.0",
     "virgil-crypto": "^3.0.0-alpha.14",
