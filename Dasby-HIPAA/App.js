@@ -25,7 +25,7 @@ export default class App extends Component {
   }
 
   identify = () => {
-    //this doesn't work correctly
+    //captured user values (username, password) will be saved here
     let chance = new Chance()
     let identity = chance.name()
     console.log('this is identity created by Chance: '+identity)
@@ -37,7 +37,6 @@ export default class App extends Component {
   }
 
   startChat = () => {
-    // const privateKeyStorage = new KeyStorage();
     this.initializeVirgil(this.state.identity)
       .then(this.getToken)
       .then(this.createChatClient)
@@ -60,13 +59,10 @@ export default class App extends Component {
       cardCrypto: virgilCardCrypto,
       cardVerifier: new VirgilCardVerifier(virgilCardCrypto)
     });
-    // const identity = 'user_' + Math.random().toString(36).substring(2);
     console.log('this is identity in initializeVirgil: '+identity)
     const keyPair = virgilCrypto.generateKeys();
-    //next line may be privacy breach. need to get private key to getToken function
-    // this.setState({keyPair})
     
-
+  //VIRGIL KEY STORAGE SYSTEM
     // Get the raw private key bytes
     // Virgil Crypto exports the raw key bytes in DER format
     const privateKeyBytes = virgilCrypto.exportPrivateKey(keyPair.privateKey, 'OPTIONAL_PASSWORD');
@@ -99,13 +95,13 @@ export default class App extends Component {
             })
             .then(response => response.json())
             .then(result => result.token)
-            .then(token => console.log(token))
+            // .then(token => console.log(token))
           })
         
         
-        cardManager.searchCards('your_other_user_identity').then(cards => {
+      cardManager.searchCards("Bessie Klein").then(cards => {
           console.log(cards);
-        });
+        }).catch(err=>console.log(err))
     });
    // took generateAuthHeader from here
     
@@ -122,44 +118,46 @@ export default class App extends Component {
 
   getToken = (publishedCard) => {
     process.nextTick = setImmediate
-    // const $ = require('jquery')
     const Promise = require('promise')
     return new Promise((resolve, reject) => {
       // console.log(publishedCard)
       this.setState({
         messages: [...this.state.messages, { body: `Connecting...` }],
-      })
+      });
       
       return new Promise((resolve, reject) => {
         const privateKeyStorage = new KeyStorage();
         const virgilCrypto = new VirgilCrypto();
         privateKeyStorage.load(this.state.identity)
           .then(loadedPrivateKeyBytes => {
-            if (loadedPrivateKeyBytes === null) {
-              return;
-            }
-            // Get the PrivateKey object from raw private key bytes
-            const privateKey = virgilCrypto.importPrivateKey(loadedPrivateKeyBytes, 'OPTIONAL_PASSWORD')
-            resolve(privateKey)
-          })
-        })
-      .then( (privateKey) => {
-      return fetch('http://792c5229.ngrok.io/get-twilio-jwt', {
-        method: 'POST',
-        headers: {
-          'Authorization': this.generateAuthHeader(publishedCard.id, privateKey),
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({identity: publishedCard.identity})
-      }).then(res => res.json()).catch(err => console.log(err)).then((token) => {
-        console.log('this is the token identity: ' + token.identity)
-        this.setState({ username: token.identity })
-        resolve(token)
-      }).catch(() => {
-        reject(Error("Failed to connect."))
+              if (loadedPrivateKeyBytes === null) {
+                return;
+              }
+              // Get the PrivateKey object from raw private key bytes
+              const privateKey = virgilCrypto.importPrivateKey(loadedPrivateKeyBytes, 'OPTIONAL_PASSWORD')
+              resolve(privateKey)
+          });
       })
-    })
+      .then( (privateKey) => {
+        return fetch('http://792c5229.ngrok.io/get-twilio-jwt', {
+          method: 'POST',
+          headers: {
+            'Authorization': this.generateAuthHeader(publishedCard.id, privateKey),
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({identity: publishedCard.identity})
+        })
+        .then(res => res.json())
+        .then((token) => {
+          console.log('this is the token identity: ' + token.identity)
+          this.setState({ username: token.identity })
+          resolve(token)
+        })
+        .catch(() => {
+          reject(Error("Failed to connect."))
+        })
+      })
   })
   }
   
@@ -177,10 +175,12 @@ export default class App extends Component {
     return new Promise((resolve, reject) => {
       chatClient.getSubscribedChannels().then(res => {
         console.log(res)
-        chatClient.getChannelByUniqueName(this.state.identity).then((channel) => {
+        // this next line will need to be changed to a channel with members in it to see the messages
+        chatClient.getChannelByUniqueName(this.state.identity)
+        .then((channel) => {
           console.log(channel)
-          this.addMessage({ body: `Joining ${this.state.identity} channel...` })
-          this.setState({ channel })
+          this.addMessage({ body: `Joining ${channel.sid} channel...` })
+          this.setState({ channel: channel})
 
           channel.join().then(() => {
             this.addMessage({ body: `Joined ${this.state.identity} channel as ${this.state.username}` })
@@ -225,7 +225,10 @@ export default class App extends Component {
   }
 
   handleNewMessage = (text) => {
+    console.log(this.state.messages)
     if (this.state.channel) {
+      // console.log(text)
+      // console.log(this.state.channel)
       this.state.channel.sendMessage(text)
     }
   }
