@@ -16,6 +16,7 @@ export default class App extends Component {
       username: null,
       channel: null,
       identity: null,
+      publicKey: null
     }
     
   }
@@ -61,7 +62,7 @@ export default class App extends Component {
     });
     console.log('this is identity in initializeVirgil: '+identity)
     const keyPair = virgilCrypto.generateKeys();
-    
+    this.setState({publicKey: keyPair.publicKey})
   //VIRGIL KEY STORAGE SYSTEM
     // Get the raw private key bytes
     // Virgil Crypto exports the raw key bytes in DER format
@@ -194,10 +195,21 @@ export default class App extends Component {
   }
 
   createChannel = (chatClient) => {
+    const virgilCrypto = new VirgilCrypto();
     return new Promise((resolve, reject) => {
+      const channelKeyPair = virgilCrypto.generateKeys();
+      const channelPrivateKeyBytes = virgilCrypto.exportPrivateKey(channelKeyPair.privateKey);
+      const encryptedChannelPrivateKeyBytes = virgilCrypto.encrypt(
+        channelPrivateKeyBytes,
+        // next line is array of all channel members' public keys. Here it just the creator's
+        [this.state.publicKey]
+      );
       this.addMessage({ body: `Creating ${this.state.identity} channel...` })
       chatClient
-        .createChannel({ uniqueName: this.state.identity, friendlyName: `${this.state.identity} and Dasby` })
+        .createChannel({
+          uniqueName: this.state.identity, friendlyName: `${this.state.identity} and Dasby`, attributes: {
+            privateKey: encryptedChannelPrivateKeyBytes.toString('base64')
+          } })
         .then(() => this.joinChannel(chatClient))
         .catch(() => reject(Error(`Could not create ${this.state.identity} channel.`)))
     })
@@ -225,14 +237,51 @@ export default class App extends Component {
   }
 
   handleNewMessage = (text) => {
+    const virgilCrypto = new VirgilCrypto();
     console.log(this.state.messages)
-    if (this.state.channel) {
-      // console.log(text)
-      // console.log(this.state.channel)
-      this.state.channel.sendMessage(text)
+    return new Promise((resolve, reject) => {
+      const privateKeyStorage = new KeyStorage();
+      const virgilCrypto = new VirgilCrypto();
+      privateKeyStorage.load(this.state.identity)
+        .then(loadedPrivateKeyBytes => {
+          if (loadedPrivateKeyBytes === null) {
+            return;
+          }
+          // Get the PrivateKey object from raw private key bytes
+          const privateKey = virgilCrypto.importPrivateKey(loadedPrivateKeyBytes, 'OPTIONAL_PASSWORD')
+          resolve(privateKey)
+        });
+    }).catch(err => console.log(err))
+    .then(privateKey => {
+      return new Promise ((resolve, reject) => {
+        if (this.state.channel) {
+          console.log(privateKey)
+          const channelPrivateKey = virgilCrypto.decrypt(
+            this.state.channel.attributes.privateKey,
+            privateKey
+          )
+          const importedChannelPrivateKey = virgilCrypto.importPrivateKey(channelPrivateKey)
+          resolve(importedChannelPrivateKey)
+        }
+      }).catch(err=>console.log(err))
+    })
+      .then(importedChannelPrivateKey => {
+        return new Promise((resolve, reject) => {
+        const channelPublicKey = virgilCrypto.extractPublicKey(importedChannelPrivateKey);
+        const encryptedMessage = virgilCrypto.encrypt(text, channelPublicKey);
+          resolve(encryptedMessage)
+        })
+        .then(encryptedMessage => {
+          console.log(encryptedMessage)
+          this.state.channel.sendMessage({ 
+            contentType: 'application/json',
+            media: encryptedMessage
+          });
+          }).catch(err => console.log(err))
+      }).catch(err => console.log(err))
+       
     }
-  }
-
+    
   render() {
     return (
       <KeyboardAvoidingView style={styles.app} behavior="padding" enabled>
